@@ -34,9 +34,9 @@ async def flush():
                     f"{RENDER_URL}/acknowledge",
                     json={"path": item["_path"], "sha": item["_sha"], "title": title},
                 )
-                print(f"  ✓ {title}")
+                print(f"  OK: {title}")
             except Exception as e:
-                print(f"  ✗ {title}: {e}")
+                print(f"  FAIL: {title}: {e}")
 
 
 if __name__ == "__main__":
