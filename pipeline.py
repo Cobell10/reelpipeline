@@ -19,12 +19,10 @@ async def download_reel(url: str, output_dir: str) -> tuple[str, dict]:
     Returns (audio_file_path, metadata_dict).
     Requires ffmpeg installed and on PATH.
     """
-    ffmpeg_bin = r"C:\Users\Mikhael\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1.1-full_build\bin"
-
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": os.path.join(output_dir, "%(id)s.%(ext)s"),
-        "ffmpeg_location": ffmpeg_bin,
+        **({"ffmpeg_location": os.environ["FFMPEG_LOCATION"]} if os.environ.get("FFMPEG_LOCATION") else {}),
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
