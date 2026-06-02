@@ -23,9 +23,22 @@ from config import SERVER_PORT, GITHUB_QUEUE_REPO
 
 app = FastAPI(title="Reel Pipeline", version="1.0.0")
 
-# Simple in-memory job store — jobs live until routed or server restarts.
-# For v1 this is fine; upgrade to Redis if you want persistence.
-_jobs: dict[str, dict] = {}
+# File-backed job store — survives server restarts and redeploys
+import pathlib
+_JOBS_DIR = pathlib.Path("/tmp/reelpipeline_jobs")
+_JOBS_DIR.mkdir(exist_ok=True)
+
+def _save_job(job: dict):
+    (_JOBS_DIR / f"{job['id']}.json").write_text(json.dumps(job))
+
+def _load_job(job_id: str) -> dict | None:
+    path = _JOBS_DIR / f"{job_id}.json"
+    return json.loads(path.read_text()) if path.exists() else None
+
+def _delete_job(job_id: str):
+    path = _JOBS_DIR / f"{job_id}.json"
+    if path.exists():
+        path.unlink()
 
 
 # ---------- Request / Response models ----------
@@ -81,7 +94,7 @@ async def process_reel(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Processing failed: {e}")
 
-    _jobs[job["id"]] = job
+    _save_job(job)
     analysis = job["analysis"]
 
     return ProcessResponse(
@@ -105,11 +118,11 @@ async def route_reel(request: Request):
     if isinstance(body, str):
         body = json.loads(body)
     req = RouteRequest(**body)
-    job = _jobs.get(req.process_id)
+    job = _load_job(req.process_id)
     if not job:
         raise HTTPException(
             status_code=404,
-            detail="Job not found. It may have expired (server restarted) or already been routed.",
+            detail="Job not found. It may have expired or already been routed.",
         )
 
     if GITHUB_QUEUE_REPO:
@@ -118,7 +131,7 @@ async def route_reel(request: Request):
             await queue_manager.enqueue(req.process_id, req.intent, req.project, job)
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Queue failed: {e}")
-        del _jobs[req.process_id]
+        _delete_job(req.process_id)
         return RouteResponse(
             status="queued",
             message=f"Saved — syncs to Obsidian shortly: \"{job['analysis']['title']}\"",
@@ -131,7 +144,7 @@ async def route_reel(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Routing failed: {e}")
 
-    del _jobs[req.process_id]
+    _delete_job(req.process_id)
     return RouteResponse(**result)
 
 
@@ -154,7 +167,7 @@ async def acknowledge(req: AcknowledgeRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "pending_jobs": len(_jobs)}
+    return {"status": "ok", "pending_jobs": len(list(_JOBS_DIR.glob("*.json")))}
 
 
 # ---------- Run ----------
