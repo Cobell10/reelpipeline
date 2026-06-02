@@ -22,14 +22,6 @@ async def download_reel(url: str, output_dir: str) -> tuple[str, dict]:
     ydl_opts = {
         "format": "bestaudio/best",
         "outtmpl": os.path.join(output_dir, "%(id)s.%(ext)s"),
-        **({"ffmpeg_location": os.environ["FFMPEG_LOCATION"]} if os.environ.get("FFMPEG_LOCATION") else {}),
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "128",
-            }
-        ],
         "quiet": True,
         "no_warnings": True,
     }
@@ -46,14 +38,17 @@ async def download_reel(url: str, output_dir: str) -> tuple[str, dict]:
             "url": url,
         }
 
-    # yt-dlp renames the file to .mp3 after postprocessing
-    audio_path = os.path.join(output_dir, f"{video_id}.mp3")
-    if not os.path.exists(audio_path):
-        # Fallback: find the first mp3 in the dir
-        for f in os.listdir(output_dir):
-            if f.endswith(".mp3"):
-                audio_path = os.path.join(output_dir, f)
-                break
+    # Find the downloaded audio file (m4a, webm, etc — Groq Whisper accepts all)
+    audio_path = None
+    for f in os.listdir(output_dir):
+        if f.startswith(video_id):
+            audio_path = os.path.join(output_dir, f)
+            break
+    if not audio_path:
+        # Fallback: grab whatever was downloaded
+        files = os.listdir(output_dir)
+        if files:
+            audio_path = os.path.join(output_dir, files[0])
 
     return audio_path, metadata
 
