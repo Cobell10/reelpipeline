@@ -91,7 +91,7 @@ async def route_to_obsidian(
     safe_title = _safe_filename(analysis["title"])
 
     # Always write the raw note
-    raw_path = f"{VAULT_RAW_FOLDER}/{date}-{safe_title}.md"
+    raw_path = f"{VAULT_RAW_FOLDER}/{date}/{safe_title}.md"
     raw_content = _build_raw_note(job)
     await write_note(raw_path, raw_content)
 
