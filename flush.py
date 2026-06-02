@@ -1,15 +1,22 @@
 """
 flush.py — run on the PC (via Task Scheduler) to sync queued reels into Obsidian.
-Hits the Render server for pending items, writes them locally, then acknowledges.
+Pulls pending items from Railway, writes to Obsidian locally, deletes from GitHub directly.
 """
 import asyncio
+import json
 import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
 
-from config import RENDER_URL
+from config import RENDER_URL, GITHUB_TOKEN, GITHUB_QUEUE_REPO
 from router import route_to_obsidian
+
+_GH_HEADERS = {
+    "Authorization": f"Bearer {GITHUB_TOKEN}",
+    "Accept": "application/vnd.github+json",
+    "X-GitHub-Api-Version": "2022-11-28",
+}
 
 
 async def flush():
@@ -30,10 +37,14 @@ async def flush():
             title = item["job"]["analysis"]["title"]
             try:
                 await route_to_obsidian(item["job"], item["intent"], item.get("project", ""))
-                await client.post(
-                    f"{RENDER_URL}/acknowledge",
-                    json={"path": item["_path"], "sha": item["_sha"], "title": title},
+                # Delete directly from GitHub — bypasses Railway /acknowledge
+                r = await client.request(
+                    "DELETE",
+                    f"https://api.github.com/repos/{GITHUB_QUEUE_REPO}/contents/{item['_path']}",
+                    headers={**_GH_HEADERS, "Content-Type": "application/json"},
+                    content=json.dumps({"message": f"processed: {title}", "sha": item["_sha"]}).encode(),
                 )
+                r.raise_for_status()
                 print(f"  OK: {title}")
             except Exception as e:
                 print(f"  FAIL: {title}: {e}")
