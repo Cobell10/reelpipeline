@@ -12,7 +12,8 @@ POST /route    — takes the process_id from /process plus the user's chosen int
 Run with:  python server.py
 """
 
-from fastapi import FastAPI, HTTPException
+import json
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from pipeline import process_reel_url
@@ -66,12 +67,15 @@ class AcknowledgeRequest(BaseModel):
 # ---------- Endpoints ----------
 
 @app.post("/process", response_model=ProcessResponse)
-async def process_reel(req: ProcessRequest):
+async def process_reel(request: Request):
     """
     Step 1 — Download, transcribe, and analyze a reel.
-    Call this when the user shares a URL. Returns a summary + intent suggestion
-    for the user to review before anything is written to Obsidian.
+    Handles both proper JSON objects and string-encoded JSON (iOS Shortcuts quirk).
     """
+    body = await request.json()
+    if isinstance(body, str):
+        body = json.loads(body)
+    req = ProcessRequest(**body)
     try:
         job = await process_reel_url(req.url, req.note)
     except Exception as e:
@@ -92,11 +96,15 @@ async def process_reel(req: ProcessRequest):
 
 
 @app.post("/route", response_model=RouteResponse)
-async def route_reel(req: RouteRequest):
+async def route_reel(request: Request):
     """
     Step 2 — Route the processed reel to Obsidian based on the user's chosen intent.
-    Must be called after /process with the returned process_id.
+    Handles both proper JSON objects and string-encoded JSON (iOS Shortcuts quirk).
     """
+    body = await request.json()
+    if isinstance(body, str):
+        body = json.loads(body)
+    req = RouteRequest(**body)
     job = _jobs.get(req.process_id)
     if not job:
         raise HTTPException(
