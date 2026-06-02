@@ -96,13 +96,10 @@ async def route_to_obsidian(
     await write_note(raw_path, raw_content)
 
     if intent == "catalog":
-        wiki_path = f"{VAULT_WIKI_FOLDER}/{safe_title}.md"
-        wiki_content = _build_wiki_note(job, raw_path)
-        await write_note(wiki_path, wiki_content)
         return {
             "status": "done",
             "message": f"Cataloged: \"{analysis['title']}\"",
-            "paths": [raw_path, wiki_path],
+            "paths": [raw_path],
         }
 
     elif intent == "try_this":
